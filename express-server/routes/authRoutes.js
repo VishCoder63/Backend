@@ -52,6 +52,26 @@ router.post("/signup", (req, res) => {
     console.log("error:", e.message);
   }
 });
+router.post("/signin", (req, res) => {
+  try {
+    const { email, password } = req.body;
+    // console.log(name,email,password)
+    // user exists ?
+    // if true print error
+    // if false make object and encrypt password and push to Array
+    const userExists = users.find((user) => user.email === email);
+    if (!userExists?.hasOwnProperty("email")) {
+      res.status(401).send("Invalid cred");
+    }
+    
+    const passwordMatches = bcrypt.compareSync(password, userExists.password, 10)
+    if (!passwordMatches) res.status(401).send("Invalid cred");
+
+      res.status(200).send(`Welcome back ${userExists.name}!`);
+  } catch (e) {
+    console.log("error:", e.message);
+  }
+});
 //UPDATE
 router.patch("/:id", (req, res) => {
   try {
