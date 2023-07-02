@@ -1,116 +1,155 @@
 const router = require('express').Router()
 const bcrypt = require('bcrypt')
+const User = require('../models/UserModel')
 const {v4} =require('uuid')
 
 
-let users = [{id:1,name:"Vishnu",email:"abc@abc.com",password:"123"}]
-
 //READ
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    res.status(200).send(JSON.stringify(users))
+    const usersDB = await User.findAll();
+    const u = usersDB.map(user => {
+      
+      user.dataValues.password = undefined;
+      return user
+      
+    })
+    res.status(200).send(u);
   } catch (e) {
-    console.log('here!',e.message)
+    console.log("here!", e.message);
   }
-})
-router.get("/:id", (req, res) => {
+});
+
+router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params
-    const user = users.find(user => user.id === id)
+    const user = await User.findOne({
+      where: {
+        id,
+      },
+    });
     if (!user) res.status(404).send("Invalid user-id")
-    else res.status(200).send({...user,password:undefined})
+    else res.status(200).send({...user['dataValues'],password:undefined})
   } catch (e) {
     console.log('here!',e.message)
   }
 })
+
+
 //CREATE
-router.post("/signup", (req, res) => {
+router.post("/signup", async (req, res) => {
   try {
     const { name, email, password } = req.body;
     // console.log(name,email,password)
     // user exists ?
     // if true print error
     // if false make object and encrypt password and push to Array
-    const userExists = users.find((user) => user.email === email);
-    if (userExists?.hasOwnProperty("email")) {
-      res.status(400).send("User's email id already exists!");
-    } else {
+    const user = await User.findOne({
+      where: {
+        email,
+      },
+    });
+    if (user) res.status(404).send("Email id is already registered")
+    else {
 
       const user = {
-        id:v4(),
         name,
         email,
         password: bcrypt.hashSync(password, 10),
       };
 
-      users.push(user);
+      const response = await User.create(user)
+      response.dataValues.password = undefined;
 
-      res.status(200).send(`Signed up ${user.name}!`);
+
+
+      res.status(200).send({...response.dataValues});
     }
-    console.log(users);
   } catch (e) {
     console.log("error:", e.message);
   }
 });
-router.post("/signin", (req, res) => {
+router.post("/signin", async (req, res) => {
   try {
     const { email, password } = req.body;
-    // console.log(name,email,password)
-    // user exists ?
-    // if true print error
-    // if false make object and encrypt password and push to Array
-    const userExists = users.find((user) => user.email === email);
-    if (!userExists?.hasOwnProperty("email")) {
-      res.status(401).send("Invalid cred");
-    }
+    const userExists = await User.findOne({
+      where: {
+        email,
+      },
+    });
+    if (!userExists) res.status(404).send("Invalid credentials!")
+      
+      const passwordMatches = bcrypt.compareSync(password, userExists.password, 10)
+      if (!passwordMatches) res.status(404).send("Invalid credentials!")
+  
+        res.status(200).send(`Welcome back ${userExists.name}!`);
     
-    const passwordMatches = bcrypt.compareSync(password, userExists.password, 10)
-    if (!passwordMatches) res.status(401).send("Invalid cred");
-
-      res.status(200).send(`Welcome back ${userExists.name}!`);
   } catch (e) {
     console.log("error:", e.message);
   }
 });
 //UPDATE
-router.patch("/:id", (req, res) => {
+router.patch("/:id", async(req, res) => {
   try {
     const { id } = req.params
-    const validUser = users.find(user => user.id == id)
-    if (!validUser) res.status(400).send("Invalid user-id")
+    const user = await User.findOne({
+      where: {
+        id,
+      },
+    });
+    if (!user) res.status(404).send("Invalid user-id")
     else {      
       const { name, email } = req.body;
+      const data = {}
 
       if (email) {
-        const user = users.find((user) => user.email === email);
-        if (user?.hasOwnProperty("email"))
+        const user = await User.findOne({
+          where: {
+            email,
+          },
+        });
+        if (user)
           res.status(400).send("Email already present in DB!");
       }
 
-        let newUser = {};
-        users.forEach((user) => {
-          if (user.id == id) {
-            user.email = email || validUser.email;
-            user.name = name;
-            newUser = { ...user };
-          }
-        });
-        res.status(200).send({...newUser,password:undefined});
+
+      // data = {
+      //   email : email || validUser.email
+      // }
+
+      
+      const updateUser = await User.update(req.body, {
+        where: {
+          id,
+        },
+      });
+      
+        res.status(200).send(updateUser);
       }
     
   } catch (e) {
     console.log('here!',e.message)
   }
-  console.log(users)
 })
 //DELETE
-router.delete("/:id", (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params
-    const user = users.find(user => user.id == id)
-    if (!user?.hasOwnProperty('email')) res.status(400).send("Invalid user-id")
+    const user = await User.findOne({
+      where: {
+        id,
+      },
+    });
+
+
+    if (!user) res.status(400).send("Invalid user-id")
     else { 
-      users = users.filter(user => user.id != id)
+      const status = await User.destroy({
+        where: {
+          id,
+        },
+      })
+
       res.status(200).send(`Deleted ${user.name}`)
     }
   } catch (e) {
